@@ -1,7 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import type { JsonRpcRequest, JsonRpcResponse, ProxyConfig } from './types.js';
 import { isJsonRpcRequest, isJsonRpcResponse } from './types.js';
 import { MessageParser, serializeMessage } from './parser.js';
@@ -49,42 +47,14 @@ export class CodexMcpProxy extends EventEmitter {
   }
 
   /**
-   * 解析命令路径（Windows 下查找 .cmd/.bat 扩展）
-   */
-  private resolveCommand(command: string): string {
-    if (process.platform !== 'win32') {
-      return command;
-    }
-
-    // 如果已经有扩展名，直接返回
-    if (/\.(cmd|bat|exe)$/i.test(command)) {
-      return command;
-    }
-
-    // 尝试查找 .cmd 或 .bat 文件
-    const pathDirs = (process.env.PATH || '').split(';');
-    for (const dir of pathDirs) {
-      for (const ext of ['.cmd', '.bat', '.exe']) {
-        const fullPath = join(dir, command + ext);
-        if (existsSync(fullPath)) {
-          return fullPath;
-        }
-      }
-    }
-
-    // 找不到则返回原命令
-    return command;
-  }
-
-  /**
    * 启动 codex mcp-server 子进程
    */
   private spawnCodexProcess(): void {
-    const resolvedCommand = this.resolveCommand(this.config.codexCommand);
-    
-    this.codexProcess = spawn(resolvedCommand, this.config.codexArgs, {
+    // Windows 需要 shell: true 才能正确解析 .cmd 文件
+    // 由于命令和参数是硬编码的，不存在注入风险
+    this.codexProcess = spawn(this.config.codexCommand, this.config.codexArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false, // 避免 shell 注入风险
+      shell: process.platform === 'win32',
       windowsHide: true,
     });
 
