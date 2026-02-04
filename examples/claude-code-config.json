@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "codex": {
+      "type": "stdio",
+      "command": "codex",
+      "args": ["mcp-server"],
+      "_comment": "直接使用 codex，无需代理（Claude Code 兼容）"
+    },
+    "codex-proxy": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:/Users/Administrator/Desktop/sicko/codex-mcp-proxy/dist/index.js"],
+      "_comment": "使用代理版本（如需 Warp 兼容）"
+    }
+  }
+}
