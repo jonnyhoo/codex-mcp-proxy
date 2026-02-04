@@ -189,6 +189,119 @@ export function handleRequest(request: JsonRpcRequest): JsonRpcResponse | null {
 }
 
 /**
+ * LLM-friendly tool descriptions with usage guidance
+ */
+export const ENHANCED_TOOL_DESCRIPTIONS: Record<string, {
+  description: string;
+  inputSchema?: Record<string, unknown>;
+}> = {
+  codex: {
+    description: `Run a Codex AI coding session for code analysis, review, debugging, or modifications.
+**Quick start:** \`{"prompt": "Review this code for bugs and security issues"}\`
+**With context:** \`{"prompt": "Fix the bug in auth.ts", "cwd": "C:/projects/myapp"}\`
+**Best practices:**
+  • Always specify \`cwd\` when working with a specific project
+  • Use \`sandbox: "read-only"\` for analysis/review tasks
+  • Use \`sandbox: "workspace-write"\` for code modifications
+**Workflow:** codex → (get threadId) → codex-reply for follow-ups.
+Use when: "review code", "fix bug", "explain code", "refactor", "write tests", "审查代码", "修复bug", "解释代码", "重构", "写测试".`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: 'The task or question. Be specific - include file paths when relevant.',
+        },
+        cwd: {
+          type: 'string', 
+          description: 'Working directory (RECOMMENDED). Example: "C:/projects/myapp"',
+        },
+        model: {
+          type: 'string',
+          description: 'Model override. Example: "gpt-5.2-codex"',
+        },
+        sandbox: {
+          type: 'string',
+          enum: ['read-only', 'workspace-write', 'danger-full-access'],
+          description: 'Permission level. read-only=analysis, workspace-write=modifications.',
+        },
+        'approval-policy': {
+          type: 'string',
+          enum: ['untrusted', 'on-failure', 'on-request', 'never'],
+          description: 'Shell command approval policy.',
+        },
+      },
+      required: ['prompt'],
+    },
+  },
+  'codex-reply': {
+    description: `Continue an existing Codex conversation with follow-up questions or instructions.
+**Example:** \`{"threadId": "thread_abc123", "prompt": "Also add unit tests"}\`
+**When to use:**
+  • Ask follow-up questions about analysis
+  • Request additional changes after initial fix
+  • Clarify or refine instructions
+**Important:** threadId is returned from the initial \`codex\` call.
+Use when: "continue", "follow up", "also do", "继续", "追问", "还要".`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID from previous codex call (REQUIRED).',
+        },
+        prompt: {
+          type: 'string',
+          description: 'Follow-up message or instruction.',
+        },
+      },
+      required: ['threadId', 'prompt'],
+    },
+  },
+};
+
+/**
+ * 增强 tools/list 响应中的 tool descriptions
+ */
+export function enhanceToolsListResponse(response: JsonRpcResponse): JsonRpcResponse {
+  if (!response.result || typeof response.result !== 'object') {
+    return response;
+  }
+
+  const result = response.result as { tools?: Array<{ name: string; description?: string; inputSchema?: unknown }> };
+  if (!result.tools || !Array.isArray(result.tools)) {
+    return response;
+  }
+
+  const enhancedTools = result.tools.map(tool => {
+    const enhancement = ENHANCED_TOOL_DESCRIPTIONS[tool.name];
+    if (enhancement) {
+      return {
+        ...tool,
+        description: enhancement.description,
+        inputSchema: enhancement.inputSchema ?? tool.inputSchema,
+      };
+    }
+    return tool;
+  });
+
+  return {
+    ...response,
+    result: {
+      ...result,
+      tools: enhancedTools,
+    },
+  };
+}
+
+/**
+ * 检查是否需要增强响应
+ */
+export function shouldEnhanceResponse(method: string): boolean {
+  return method === 'tools/list';
+}
+
+/**
  * 创建配置对象，应用默认值
  */
 export function createConfig(options: {

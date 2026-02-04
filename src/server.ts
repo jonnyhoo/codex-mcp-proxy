@@ -15,6 +15,8 @@ import {
   formatLogMessage,
   shouldLog,
   isNotification,
+  enhanceToolsListResponse,
+  shouldEnhanceResponse,
 } from './handlers.js';
 
 /**
@@ -197,11 +199,18 @@ export class CodexMcpProxy extends EventEmitter {
   private handleCodexResponse(response: JsonRpcResponse): void {
     this.log('debug', `→ Codex response: id=${response.id}`);
 
-    // 清理已完成的请求
-    this.requestTracker.complete(response.id);
+    // 清理已完成的请求并获取原始请求
+    const originalRequest = this.requestTracker.complete(response.id);
+
+    // 如果是 tools/list 响应，增强 tool descriptions
+    let finalResponse = response;
+    if (originalRequest && shouldEnhanceResponse(originalRequest.method)) {
+      finalResponse = enhanceToolsListResponse(response);
+      this.log('debug', `→ Enhanced ${originalRequest.method} response`);
+    }
 
     // 转发给客户端
-    this.sendToClient(response);
+    this.sendToClient(finalResponse);
   }
 
   /**

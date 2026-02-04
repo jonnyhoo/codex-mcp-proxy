@@ -9,6 +9,9 @@ import {
   RequestTracker,
   formatLogMessage,
   shouldLog,
+  enhanceToolsListResponse,
+  shouldEnhanceResponse,
+  ENHANCED_TOOL_DESCRIPTIONS,
 } from '../src/handlers.js';
 
 describe('isNotification', () => {
@@ -335,5 +338,122 @@ describe('shouldLog', () => {
   it('should return true for error regardless of debug flag', () => {
     expect(shouldLog('error', false)).toBe(true);
     expect(shouldLog('error', true)).toBe(true);
+  });
+});
+
+describe('shouldEnhanceResponse', () => {
+  it('should return true for tools/list', () => {
+    expect(shouldEnhanceResponse('tools/list')).toBe(true);
+  });
+
+  it('should return false for other methods', () => {
+    expect(shouldEnhanceResponse('tools/call')).toBe(false);
+    expect(shouldEnhanceResponse('initialize')).toBe(false);
+    expect(shouldEnhanceResponse('resources/list')).toBe(false);
+  });
+});
+
+describe('enhanceToolsListResponse', () => {
+  it('should enhance codex tool description', () => {
+    const response = {
+      jsonrpc: '2.0' as const,
+      id: 1,
+      result: {
+        tools: [
+          { name: 'codex', description: 'Original description' },
+        ],
+      },
+    };
+
+    const enhanced = enhanceToolsListResponse(response);
+    const tools = (enhanced.result as { tools: Array<{ name: string; description: string }> }).tools;
+
+    expect(tools[0].description).toContain('Quick start');
+    expect(tools[0].description).toContain('Use when');
+    expect(tools[0].description).toContain('审查代码');
+  });
+
+  it('should enhance codex-reply tool description', () => {
+    const response = {
+      jsonrpc: '2.0' as const,
+      id: 1,
+      result: {
+        tools: [
+          { name: 'codex-reply', description: 'Original' },
+        ],
+      },
+    };
+
+    const enhanced = enhanceToolsListResponse(response);
+    const tools = (enhanced.result as { tools: Array<{ name: string; description: string }> }).tools;
+
+    expect(tools[0].description).toContain('threadId');
+    expect(tools[0].description).toContain('继续');
+  });
+
+  it('should preserve unknown tools', () => {
+    const response = {
+      jsonrpc: '2.0' as const,
+      id: 1,
+      result: {
+        tools: [
+          { name: 'unknown-tool', description: 'Keep this' },
+        ],
+      },
+    };
+
+    const enhanced = enhanceToolsListResponse(response);
+    const tools = (enhanced.result as { tools: Array<{ name: string; description: string }> }).tools;
+
+    expect(tools[0].description).toBe('Keep this');
+  });
+
+  it('should handle response without tools', () => {
+    const response = {
+      jsonrpc: '2.0' as const,
+      id: 1,
+      result: {},
+    };
+
+    const enhanced = enhanceToolsListResponse(response);
+    expect(enhanced).toEqual(response);
+  });
+
+  it('should handle response without result', () => {
+    const response = {
+      jsonrpc: '2.0' as const,
+      id: 1,
+      error: { code: -32600, message: 'Error' },
+    };
+
+    const enhanced = enhanceToolsListResponse(response);
+    expect(enhanced).toEqual(response);
+  });
+});
+
+describe('ENHANCED_TOOL_DESCRIPTIONS', () => {
+  it('should have codex tool with LLM-friendly description', () => {
+    const codex = ENHANCED_TOOL_DESCRIPTIONS.codex;
+    expect(codex).toBeDefined();
+    expect(codex.description).toContain('Quick start');
+    expect(codex.description).toContain('Best practices');
+    expect(codex.description).toContain('Workflow');
+    expect(codex.description).toContain('Use when');
+  });
+
+  it('should have codex-reply tool with LLM-friendly description', () => {
+    const reply = ENHANCED_TOOL_DESCRIPTIONS['codex-reply'];
+    expect(reply).toBeDefined();
+    expect(reply.description).toContain('Example');
+    expect(reply.description).toContain('When to use');
+    expect(reply.description).toContain('Important');
+  });
+
+  it('should have proper inputSchema for codex', () => {
+    const schema = ENHANCED_TOOL_DESCRIPTIONS.codex.inputSchema;
+    expect(schema).toBeDefined();
+    expect(schema?.properties).toHaveProperty('prompt');
+    expect(schema?.properties).toHaveProperty('cwd');
+    expect(schema?.properties).toHaveProperty('sandbox');
   });
 });
